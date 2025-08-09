@@ -1,4 +1,5 @@
 // app.js — full client logic with charts, firebase (optional), growth animation
+// and enhanced service worker auto-update flow.
 
 const KEY = 'habit-bic-pwa-v1';
 const $ = id => document.getElementById(id);
@@ -173,7 +174,6 @@ function showGrowthVisualIfNeeded() {
 
 function normalizeScore(score, totalDays) {
   if (!totalDays || totalDays === 0) return 0.5;
-  // Score range ~[-totalDays, totalDays] — map to 0..1
   const norm = (score + totalDays) / (2 * totalDays);
   return Math.max(0, Math.min(1, norm));
 }
@@ -190,7 +190,6 @@ function updateGrowthVisual(score, totalDays) {
   if (group) {
     const min = 0.18, max = 1.0;
     const scaleY = min + (max - min) * progress;
-    // set transform attribute smoothly
     group.style.transition = 'transform 900ms cubic-bezier(.2,.8,.2,1)';
     group.setAttribute('transform', `translate(50,92) scale(1,${scaleY})`);
   }
@@ -309,7 +308,50 @@ function renderSummary(){
 // Sync to Firestore
 async function syncIfRemote(){ if(!firebaseEnabled || !auth || !auth.currentUser) return; const uid = auth.currentUser.uid; const docRef = db.collection('users').doc(uid); const user = getCurrentUser(); if(!user) return; try{ await docRef.set({ userMeta:{ email: auth.currentUser.email, updatedAt: new Date().toISOString() }, appState: user.state }, { merge:true }); }catch(e){ console.warn('sync failed', e); } }
 
+// ----------------- SERVICE WORKER: enhanced registration -----------------
+// Call this to register SW and auto-apply updates
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    // Use absolute path to avoid scoping issues on GitHub Pages
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    console.log('Service worker registered:', reg);
+
+    // If there's already a waiting worker, tell it to skip waiting (activate)
+    if (reg.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+
+    // Listen for updates (new installing worker)
+    reg.addEventListener('updatefound', () => {
+      const newSW = reg.installing;
+      if (!newSW) return;
+      newSW.addEventListener('statechange', () => {
+        if (newSW.state === 'installed') {
+          if (navigator.serviceWorker.controller) {
+            newSW.postMessage({ type: 'SKIP_WAITING' });
+          } else {
+            console.log('Service worker installed for the first time.');
+          }
+        }
+      });
+    });
+
+    // When the new service worker takes control, reload the page to load fresh assets.
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      console.log('New service worker activated — reloading page to use updated assets.');
+      window.location.reload();
+    });
+
+  } catch (err) {
+    console.warn('Service worker registration failed:', err);
+  }
+}
+
 // Init
-function init(){ if(!app.users || Object.keys(app.users).length===0){ const id = ensureLocalUser('you'); app.currentUserId = id; saveLocal(app); } renderAll(); if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(()=>console.log('sw registered')).catch(()=>{}); } }
+function init(){ if(!app.users || Object.keys(app.users).length===0){ const id = ensureLocalUser('you'); app.currentUserId = id; saveLocal(app); } renderAll(); registerServiceWorker(); }
 
 init();
