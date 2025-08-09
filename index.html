@@ -3,41 +3,39 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Vibe Check - Your habit tracker (Firebase)</title>
+  <title>Habit Tracker — Consistency Score</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb"/>
   <style>
-    /* Minimal inline styles for quick load */
     :root{--bg:#f6f7fb;--card:#fff;--accent:#2563eb;--muted:#6b7280;--danger:#ef4444;--ok:#10b981}
     *{box-sizing:border-box}
     body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:#0f172a}
-    .app{max-width:1000px;margin:20px auto;padding:14px}
-    header{display:flex;justify-content:space-between;align-items:center;gap:12px}
-    header h1{margin:0;font-size:1.2rem}
-    .card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 18px rgba(2,6,23,0.06);margin-top:10px}
-    .row{display:flex;gap:8px;align-items:center}
-    input,select,button{padding:8px;border-radius:8px;border:1px solid #e6e9ef}
-    button{background:var(--accent);color:#fff;border:0;cursor:pointer}
-    .muted{color:var(--muted)}
-    .sidebar{width:300px}
+    .app{max-width:1100px;margin:20px auto;padding:16px}
+    header h1{margin:0}header .muted{color:var(--muted)}
     .layout{display:flex;gap:12px}
-    .habit-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border:1px solid #eef2ff;border-radius:8px;margin-bottom:8px}
+    .sidebar{width:320px}
+    .card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 18px rgba(2,6,23,0.06);margin-bottom:12px}
+    .habit-item{padding:8px;border-radius:8px;border:1px solid #eef2ff;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+    .controls{display:flex;gap:8px}
+    .content{flex:1}
+    .small{color:var(--muted)}
+    input,select,textarea{padding:8px;border-radius:6px;border:1px solid #e6e9ef}
+    button{padding:8px 10px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+    button.danger{background:var(--danger)}
+    button.green{background:var(--ok)}
     canvas{max-width:100%}
-    .small{font-size:0.9rem;color:var(--muted)}
-    .danger{background:var(--danger)}
-    .green{background:var(--ok)}
+    .row{display:flex;gap:8px;align-items:center}
     .flexcol{display:flex;flex-direction:column;gap:8px}
   </style>
 </head>
 <body>
   <div class="app">
-    <header>
+    <header style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
       <div>
-        <h1>Habit Tracker — BIC Score</h1>
-        <div class="small muted">Multiple habits · Backfill dates · Firebase sync</div>
+        <h1>Habit Tracker — Consistency Score</h1>
+        <div class="small muted">Multiple habits · Backfill dates · Firebase sync (optional)</div>
       </div>
-      <div id="auth-area" class="card small">
-        <!-- auth UI injected by app.js -->
+      <div id="auth-area" class="card small" style="min-width:260px">
         Loading...
       </div>
     </header>
@@ -53,7 +51,7 @@
           </div>
         </div>
 
-        <div class="card" style="margin-top:8px">
+        <div class="card">
           <h3>Habits</h3>
           <div id="habit-list"></div>
           <div style="margin-top:8px">
@@ -63,7 +61,7 @@
         </div>
       </aside>
 
-      <section class="content" style="flex:1">
+      <section class="content">
         <div class="card">
           <h3 id="current-habit-title">Select a habit</h3>
           <div id="habit-controls" style="display:none" class="flexcol">
@@ -81,24 +79,28 @@
           </div>
         </div>
 
-        <div id="summary-card" class="card" style="margin-top:12px;display:none">
+        <div id="summary-card" class="card" style="display:none">
           <h4>Aggregated Summary</h4>
-          <div class="small">Total Days: <span id="total-days">0</span> | Clean (C): <span id="clean-days">0</span> | Indulge (I): <span id="indulge-days">0</span> | Consistency Score <strong id="consistency-score">0</strong></div>
+          <div class="small">Total Days: <span id="total-days">0</span> | Clean (C): <span id="clean-days">0</span> | Indulge (I): <span id="indulge-days">0</span> | Consistency Score: <strong id="consistency-score">0</strong></div>
         </div>
 
-        <div id="chart-card" class="card" style="margin-top:12px;display:none">
-          <h4>Chart (last 30 days)</h4>
+        <div id="chart-card" class="card" style="display:none">
+          <h4>Habit Chart</h4>
+          <div style="margin-bottom:8px">
+            <label><input type="radio" name="habit-range" value="30" checked /> Last 30 days</label>
+            <label style="margin-left:12px"><input type="radio" name="habit-range" value="all" /> All days</label>
+          </div>
           <canvas id="habit-chart" width="800" height="300"></canvas>
         </div>
-        <div id="consistency-card" class="card" style="margin-top:12px; display:none">
+
+        <div id="consistency-card" class="card" style="display:none">
           <h4>Consistency Score (movement)</h4>
           <div style="margin-bottom:8px">
-          <label><input type="radio" name="consistency-range" value="30" checked /> Last 30 days</label>
-          <label style="margin-left:12px"><input type="radio" name="consistency-range" value="all" /> All days</label>
+            <label><input type="radio" name="consistency-range" value="30" checked /> Last 30 days</label>
+            <label style="margin-left:12px"><input type="radio" name="consistency-range" value="all" /> All days</label>
           </div>
           <canvas id="consistency-chart" width="900" height="250"></canvas>
-</div>
-
+        </div>
       </section>
     </div>
 
