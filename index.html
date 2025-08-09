@@ -26,6 +26,22 @@
     canvas{max-width:100%}
     .row{display:flex;gap:8px;align-items:center}
     .flexcol{display:flex;flex-direction:column;gap:8px}
+
+    /* growth visuals */
+    @keyframes pop {
+      0% { transform: scale(0.4); opacity: 0; }
+      60% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .particle {
+      position: absolute;
+      width:10px; height:10px; border-radius:50%;
+      pointer-events:none;
+      animation: floatUp 1100ms ease-out forwards;
+    }
+    @keyframes floatUp {
+      to { transform: translateY(-80px) translateX(10px) rotate(20deg); opacity:0; }
+    }
   </style>
 </head>
 <body>
@@ -82,6 +98,36 @@
         <div id="summary-card" class="card" style="display:none">
           <h4>Aggregated Summary</h4>
           <div class="small">Total Days: <span id="total-days">0</span> | Clean (C): <span id="clean-days">0</span> | Indulge (I): <span id="indulge-days">0</span> | Consistency Score: <strong id="consistency-score">0</strong></div>
+        </div>
+
+        <!-- Growth visual -->
+        <div id="growth-visual" class="card" style="margin-top:12px; display:none; text-align:center;">
+          <h4 style="margin-bottom:8px">Growth</h4>
+          <div style="display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap; position:relative">
+            <svg id="plant-svg" width="140" height="160" viewBox="0 0 100 120" aria-hidden="true">
+              <!-- pot -->
+              <rect x="20" y="95" width="60" height="15" rx="3" fill="#8b5e34"/>
+              <rect x="25" y="90" width="50" height="8" rx="2" fill="#c68642"/>
+              <!-- soil -->
+              <ellipse cx="50" cy="92" rx="28" ry="6" fill="#4b2f1f"/>
+              <!-- stem (we'll scale Y) -->
+              <g id="plant-group" transform="translate(50,92) scale(1,0.2)">
+                <path id="stem" d="M0,0 C2,-18 8,-30 6,-52" stroke="#2f7a3e" stroke-width="3" stroke-linecap="round" fill="none"/>
+                <path id="leaf-left" d="M2,-28 C-10,-24 -18,-12 -6,-8" fill="#2f7a3e"/>
+                <path id="leaf-right" d="M6,-36 C18,-32 26,-18 14,-12" fill="#2f7a3e"/>
+              </g>
+            </svg>
+
+            <div style="min-width:220px; text-align:left; position:relative">
+              <div style="font-size:0.9rem;color:#475569">Consistency progress</div>
+              <div style="height:10px;background:#eef2ff;border-radius:12px;margin-top:6px;overflow:hidden">
+                <div id="growth-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#86efac,#16a34a); transition:width 900ms ease;"></div>
+              </div>
+              <div style="margin-top:8px" class="small muted">Score: <strong id="growth-score">0</strong></div>
+            </div>
+
+            <div id="growth-particles" style="position:absolute; left:50%; transform:translateX(-50%); bottom:10px; pointer-events:none; height:0;"></div>
+          </div>
         </div>
 
         <div id="chart-card" class="card" style="display:none">
