@@ -1,4 +1,5 @@
-// Final app.js - updated per user's requests
+// app.js — full client logic with charts, firebase (optional), growth animation
+
 const KEY = 'habit-bic-pwa-v1';
 const $ = id => document.getElementById(id);
 const todayKey = (d=new Date()) => d.toISOString().slice(0,10);
@@ -23,7 +24,7 @@ if (typeof FIREBASE_CONFIG !== 'undefined' && FIREBASE_CONFIG) {
   } catch(e){ console.warn('Firebase init failed', e); firebaseEnabled=false; }
 }
 
-// Auth UI and logic (updated to hide after user selection)
+// ----------------- AUTH & USER MAPPING -----------------
 function renderAuth(){
   const area = $('auth-area');
   area.innerHTML = '';
@@ -62,7 +63,6 @@ function renderAuth(){
 async function authSignUp(){ const email=$('auth-email').value.trim(), pass=$('auth-pass').value; if(!email||!pass) return alert('email+password required'); try{ const cred = await auth.createUserWithEmailAndPassword(email,pass); await saveRemoteUser(cred.user.uid); }catch(e){ alert('Signup failed: '+e.message); } }
 async function authSignIn(){ const email=$('auth-email').value.trim(), pass=$('auth-pass').value; if(!email||!pass) return alert('email+password required'); try{ await auth.signInWithEmailAndPassword(email,pass); }catch(e){ alert('Signin failed: '+e.message); } }
 
-// Ensure deterministic user mapping for firebase users
 async function loadRemoteUser(user){
   if(!db) return;
   const uid = user.uid;
@@ -94,8 +94,8 @@ async function saveRemoteUser(uid){
   try { await docRef.set({ userMeta:{ email: auth.currentUser.email, updatedAt: new Date().toISOString() }, appState: user.state }, { merge:true }); } catch(e){ console.warn('sync failed', e); }
 }
 
-// --- Data functions ---
-function ensureLocalUser(name){ name = name || ('user_'+Math.random().toString(36).slice(2,5)); const id = 'local_'+name.replace(/\\s+/g,'_') + '_' + Math.random().toString(36).slice(2,4); app.users[id] = { displayName: name, isLocal:true, createdAt: new Date().toISOString(), state: { habits: {} } }; app.currentUserId = id; saveLocal(app); return id; }
+// ----------------- DATA FUNCTIONS -----------------
+function ensureLocalUser(name){ name = name || ('user_'+Math.random().toString(36).slice(2,5)); const id = 'local_'+name.replace(/\s+/g,'_') + '_' + Math.random().toString(36).slice(2,4); app.users[id] = { displayName: name, isLocal:true, createdAt: new Date().toISOString(), state: { habits: {} } }; app.currentUserId = id; saveLocal(app); return id; }
 function getCurrentUser(){ return app.users[app.currentUserId] || null; }
 function addHabit(name){ const user = getCurrentUser(); if(!user) return alert('Select or create a user'); const id = 'h_' + Math.random().toString(36).slice(2,9); user.state.habits[id] = { id, name: name || 'Habit', history: {} }; saveLocal(app); renderAll(); syncIfRemote(); }
 function deleteHabit(hid){ const user = getCurrentUser(); if(!user) return; delete user.state.habits[hid]; saveLocal(app); renderAll(); syncIfRemote(); }
@@ -106,10 +106,9 @@ function computeAggregatesForUser(user){
   const days = {}; Object.values(user.state.habits || {}).forEach(h=>{ Object.entries(h.history||{}).forEach(([date,entry])=>{ days[date]=days[date]||{indulgences:0}; days[date].indulgences += entry.indulgences||0; }); }); const totalDays = Object.keys(days).length; let C=0,I=0; Object.values(days).forEach(d=>{ if(d.indulgences===0) C++; else I++; }); const bic = totalDays===0?0:(C - I*(1 - (C/totalDays))); return { totalDays, C, I, bic: Number(bic.toFixed(4)), days };
 }
 
-// Consistency series builder (cumulative score over time)
+// ----------------- CONSISTENCY SERIES & CHARTS -----------------
 function buildConsistencySeries(user, mode='30'){
   const days = {}; Object.values(user.state.habits || {}).forEach(h=>{ Object.entries(h.history||{}).forEach(([date,entry])=>{ days[date]=days[date]||{indulgences:0}; days[date].indulgences += entry.indulgences||0; }); });
-  // if no dates, but we want last 30 days show zeros/dates
   const allDates = Object.keys(days).sort();
   let targetDates = allDates;
   if (mode === '30') {
@@ -117,7 +116,6 @@ function buildConsistencySeries(user, mode='30'){
     for(let i=29;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); filled.push(d.toISOString().slice(0,10)); }
     targetDates = filled;
   } else {
-    // all days chronological, but include days with no entries? we only show days that had entries for 'all'
     targetDates = allDates;
   }
   if(targetDates.length===0) return { dates:[], scores:[] };
@@ -141,11 +139,10 @@ function renderConsistencyChart(mode='30'){
   const { dates, scores } = buildConsistencySeries(user, mode);
   const ctx = $('consistency-chart').getContext('2d');
   if (consistencyChartRef) consistencyChartRef.destroy();
-  consistencyChartRef = new Chart(ctx, { type:'line', data:{ labels:dates, datasets:[{ label:'Consistency Score', data:scores, borderColor:'#2563eb', tension:0.2, fill:false }] }, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:false } } } });
+  consistencyChartRef = new Chart(ctx, { type:'line', data:{ labels:dates, datasets:[{ label:'Consistency Score', data:scores, borderColor:'#2563eb', tension:0.2, fill:false }] }, options:{ animation:{ duration:900, easing:'easeOutQuart' }, responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:false } } } });
   $('consistency-card').style.display = 'block';
 }
 
-// Habit chart (last30/all)
 function renderChart(mode='30'){
   const user = getCurrentUser(); if(!user || !selectedHabitId){ $('chart-card').style.display='none'; return; }
   const h = user.state.habits[selectedHabitId];
@@ -164,18 +161,80 @@ function renderChart(mode='30'){
   $('chart-card').style.display='block';
 }
 
-// Rendering UI
+// ----------------- GROWTH VISUAL HELPERS -----------------
+let lastConsistencyValue = null;
+
+function showGrowthVisualIfNeeded() {
+  const el = $('growth-visual');
+  const user = getCurrentUser();
+  if (!user) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+}
+
+function normalizeScore(score, totalDays) {
+  if (!totalDays || totalDays === 0) return 0.5;
+  // Score range ~[-totalDays, totalDays] — map to 0..1
+  const norm = (score + totalDays) / (2 * totalDays);
+  return Math.max(0, Math.min(1, norm));
+}
+
+function updateGrowthVisual(score, totalDays) {
+  const progress = normalizeScore(score, totalDays);
+  const pct = Math.round(progress * 100);
+  const bar = document.getElementById('growth-bar');
+  if (bar) bar.style.width = pct + '%';
+  const scEl = document.getElementById('growth-score');
+  if (scEl) scEl.textContent = score;
+
+  const group = document.getElementById('plant-group');
+  if (group) {
+    const min = 0.18, max = 1.0;
+    const scaleY = min + (max - min) * progress;
+    // set transform attribute smoothly
+    group.style.transition = 'transform 900ms cubic-bezier(.2,.8,.2,1)';
+    group.setAttribute('transform', `translate(50,92) scale(1,${scaleY})`);
+  }
+
+  if (lastConsistencyValue === null) lastConsistencyValue = score;
+  const delta = score - lastConsistencyValue;
+  if (delta > Math.max(1, Math.abs(lastConsistencyValue) * 0.08)) {
+    burstParticles();
+  }
+  lastConsistencyValue = score;
+}
+
+function burstParticles() {
+  const wrapper = document.getElementById('growth-particles');
+  if (!wrapper) return;
+  const colors = ['#34d399','#60a5fa','#f97316','#f472b6','#facc15'];
+  for (let i=0;i<8;i++){
+    const p = document.createElement('div');
+    p.className='particle';
+    p.style.background = colors[i % colors.length];
+    const left = 50 + (Math.random()*60 - 30);
+    p.style.left = left + 'px';
+    p.style.bottom = '10px';
+    p.style.opacity = '1';
+    wrapper.appendChild(p);
+    setTimeout(()=> {
+      p.style.transition = 'transform 1100ms ease-out, opacity 1100ms ease-out';
+      p.style.transform = `translateY(-${80 + Math.random()*40}px) translateX(${(Math.random()*60-30)}px) rotate(${Math.random()*360}deg)`;
+      p.style.opacity = '0';
+    }, 10);
+    setTimeout(()=> p.remove(), 1400);
+  }
+}
+
+// ----------------- RENDER / UI -----------------
 function renderAll(){
   renderAuth();
   renderUsers();
   renderHabits();
   renderSummary();
-  // render charts respecting selected options
   const habitMode = document.querySelector('input[name="habit-range"]:checked') ? document.querySelector('input[name="habit-range"]:checked').value : '30';
   const consMode = document.querySelector('input[name="consistency-range"]:checked') ? document.querySelector('input[name="consistency-range"]:checked').value : '30';
   renderChart(habitMode);
   renderConsistencyChart(consMode);
-  // wire radio handlers
   document.getElementsByName('habit-range').forEach(r=>r.onchange=()=>renderChart(document.querySelector('input[name="habit-range"]:checked').value));
   document.getElementsByName('consistency-range').forEach(r=>r.onchange=()=>renderConsistencyChart(document.querySelector('input[name=\"consistency-range\"]:checked').value));
 }
@@ -227,11 +286,11 @@ function selectHabit(hid){
   $('today-summary').textContent = todayEntry;
   $('btn-save-entry').onclick = ()=>{ const dk=$('entry-date').value; const n=Number($('entry-indulgences').value||0); setEntry(hid, dk, n); $('entry-indulgences').value='0'; };
   $('btn-mark-clean').onclick = ()=>{ setEntry(hid, $('entry-date').value, 0); };
-  $('btn-export-json').onclick = ()=>{ const data = JSON.stringify(h, null, 2); const blob = new Blob([data], { type:'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download = `${h.name.replace(/\\s+/g,'_')}_habit.json`; a.click(); URL.revokeObjectURL(url); };
+  $('btn-export-json').onclick = ()=>{ const data = JSON.stringify(h, null, 2); const blob = new Blob([data], { type:'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download = `${h.name.replace(/\s+/g,'_')}_habit.json`; a.click(); URL.revokeObjectURL(url); };
   $('btn-import-json').onclick = ()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='application/json'; inp.onchange = e=>{ const f=e.target.files[0]; const r=new FileReader(); r.onload = ev=>{ try{ const parsed = JSON.parse(ev.target.result); user.state.habits[hid] = parsed; saveLocal(app); renderAll(); }catch(err){ alert('Invalid JSON'); } }; r.readAsText(f); }; inp.click(); };
   renderSummary();
-  renderChart(document.querySelector('input[name=\"habit-range\"]:checked') ? document.querySelector('input[name=\"habit-range\"]:checked').value : '30');
-  renderConsistencyChart(document.querySelector('input[name=\"consistency-range\"]:checked') ? document.querySelector('input[name=\"consistency-range\"]:checked').value : '30');
+  renderChart(document.querySelector('input[name="habit-range"]:checked') ? document.querySelector('input[name="habit-range"]:checked').value : '30');
+  renderConsistencyChart(document.querySelector('input[name="consistency-range"]:checked') ? document.querySelector('input[name="consistency-range"]:checked').value : '30');
 }
 
 function renderSummary(){
@@ -242,6 +301,9 @@ function renderSummary(){
   $('indulge-days').textContent = agg.I;
   $('consistency-score').textContent = agg.bic;
   $('summary-card').style.display = 'block';
+  // growth visual update
+  showGrowthVisualIfNeeded();
+  updateGrowthVisual(agg.bic, agg.totalDays);
 }
 
 // Sync to Firestore
