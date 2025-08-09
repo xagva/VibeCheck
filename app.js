@@ -379,6 +379,11 @@ function init(){
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').then(()=>console.log('sw registered')).catch(()=>{});
   }
+  document.getElementsByName('consistency-range').forEach(r => {
+  r.onchange = () => {
+    renderConsistencyChart(document.querySelector('input[name="consistency-range"]:checked').value);
+  };
+});
 }
 
 init();
