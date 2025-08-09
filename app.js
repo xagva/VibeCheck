@@ -188,6 +188,80 @@ function computeAggregatesForUser(user){
   return { totalDays, C, I, bic: Number(bic.toFixed(4)), days };
 }
 
+// Return sorted array of unique dates across all habits for the user
+function getAllDatesForUser(user) {
+  const set = new Set();
+  Object.values(user.state.habits || {}).forEach(h => {
+    Object.keys(h.history || {}).forEach(d => set.add(d));
+  });
+  return Array.from(set).sort();
+}
+
+// Build time series of cumulative BIC (consistency) score per day (chronological)
+function buildConsistencySeries(user, mode = '30') {
+  // collect all dates (if mode === '30' we will focus last 30 days)
+  // we need dates in chronological order
+  const days = {};
+  Object.values(user.state.habits || {}).forEach(h => {
+    Object.entries(h.history || {}).forEach(([date, entry]) => {
+      days[date] = days[date] || { indulgences: 0 };
+      days[date].indulgences += entry.indulgences || 0;
+    });
+  });
+
+  const allDates = Object.keys(days).sort(); // chronological asc
+  if (allDates.length === 0) return { dates: [], scores: [] };
+
+  // If mode is '30', create a rolling window of last 30 calendar days up to today
+  let targetDates = allDates;
+  if (mode === '30') {
+    const today = new Date();
+    const cutoff = new Date(); cutoff.setDate(today.getDate() - 29); // include today
+    targetDates = allDates.filter(d => new Date(d) >= cutoff);
+    // Ensure we include days with 0 entries in the last 30 days (fill in missing dates)
+    const filled = [];
+    for (let i = 29; i >= 0; i--) {
+      const dt = new Date(); dt.setDate(dt.getDate() - i);
+      filled.push(dt.toISOString().slice(0,10));
+    }
+    targetDates = filled;
+  }
+
+  const datesChron = targetDates.sort();
+  const scores = [];
+  // cumulative: for each date up to current, compute C & I up to that date and score
+  for (let i = 0; i < datesChron.length; i++) {
+    const subDates = datesChron.slice(0, i + 1);
+    let C = 0, I = 0;
+    subDates.forEach(d => {
+      const totalInd = (days[d] && days[d].indulgences) ? days[d].indulgences : 0;
+      if (totalInd === 0) C++; else I++;
+    });
+    const totalDays = C + I;
+    const sc = totalDays === 0 ? 0 : (C - I * (1 - (C / totalDays)));
+    scores.push(Number(sc.toFixed(4)));
+  }
+  return { dates: datesChron, scores };
+}
+
+let consistencyChartRef = null;
+function renderConsistencyChart(mode = '30') {
+  const user = getCurrentUser();
+  if (!user || Object.keys(user.state.habits || {}).length === 0) {
+    $('consistency-card').style.display = 'none';
+    return;
+  }
+  const { dates, scores } = buildConsistencySeries(user, mode);
+  const ctx = document.getElementById('consistency-chart').getContext('2d');
+  if (consistencyChartRef) consistencyChartRef.destroy();
+  consistencyChartRef = new Chart(ctx, {
+    type: 'line',
+    data: { labels: dates, datasets: [{ label: 'Consistency Score', data: scores, fill: false, tension: 0.2 }]},
+    options: { responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:false } } }
+  });
+  $('consistency-card').style.display = 'block';
+}
+
 // --- Rendering ---
 function renderAll(){
   renderAuth();
