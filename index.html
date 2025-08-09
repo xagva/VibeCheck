@@ -90,6 +90,15 @@
           <h4>Chart (last 30 days)</h4>
           <canvas id="habit-chart" width="800" height="300"></canvas>
         </div>
+        <div id="consistency-card" class="card" style="margin-top:12px; display:none">
+          <h4>Consistency Score (movement)</h4>
+          <div style="margin-bottom:8px">
+          <label><input type="radio" name="consistency-range" value="30" checked /> Last 30 days</label>
+          <label style="margin-left:12px"><input type="radio" name="consistency-range" value="all" /> All days</label>
+          </div>
+          <canvas id="consistency-chart" width="900" height="250"></canvas>
+</div>
+
       </section>
     </div>
 
