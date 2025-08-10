@@ -1,5 +1,5 @@
 // sw.js — simple app-shell caching with version bump for updates
-const CACHE_NAME = 'habit-bic-static-v2';
+const CACHE_NAME = 'habit-bic-static-v3';
 const FILES_TO_CACHE = [
   './',
   './index.html',
