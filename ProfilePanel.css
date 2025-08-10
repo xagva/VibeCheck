@@ -1,0 +1,45 @@
+.profile-panel {
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  margin: 10px;
+  background: white;
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out;
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  background: #f0f0f0;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.profile-content {
+  padding: 10px;
+}
+
+.username-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.username-section input {
+  padding: 5px;
+}
+
+.username-section button {
+  padding: 4px 8px;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+ul li {
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
